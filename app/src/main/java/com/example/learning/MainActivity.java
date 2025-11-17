@@ -36,6 +36,7 @@ import java.util.Properties;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import retrofit2.Call;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -97,12 +98,10 @@ public class MainActivity extends AppCompatActivity {
             Log.d("Prefetch", "All files already exist, skipping download");
         }
 
-
         prefetchAllMedia(() -> {
-
             Log.d("Prefetch", "All media files processed");
             if (!allFilesAlreadyExist) {
-                Toast.makeText(this, "Svi fajlovi su  preuzeti", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Svi fajlovi su preuzeti", Toast.LENGTH_LONG).show();
             }
         });
 
@@ -112,7 +111,6 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onAnimationEnd(Animator animation) {
-
                 if (areAllFilesDownloaded()) {
                     startMediaPlayback();
                 } else {
@@ -182,7 +180,6 @@ public class MainActivity extends AppCompatActivity {
                 if (!localFile.exists()) {
                     try {
                         Log.d("Prefetch", "Downloading: " + item.getUrl());
-                        final int currentIndex = i;
                         Request request = new Request.Builder().url(item.getUrl()).build();
                         Response response = client.newCall(request).execute();
                         if (response.isSuccessful() && response.body() != null) {
@@ -208,32 +205,14 @@ public class MainActivity extends AppCompatActivity {
                             });
                         } else {
                             Log.e("Prefetch", "Failed to download: " + item.getUrl());
-                            runOnUiThread(() -> {
-                                Toast.makeText(MainActivity.this,
-                                        "Greška pri preuzimanju: " + fileName,
-                                        Toast.LENGTH_SHORT).show();
-                            });
                         }
                     } catch (Exception e) {
                         Log.e("Prefetch", "Error downloading: " + item.getUrl(), e);
-                        runOnUiThread(() -> {
-                            Toast.makeText(MainActivity.this,
-                                    "Greška: " + e.getMessage(),
-                                    Toast.LENGTH_SHORT).show();
-                        });
                     }
                 } else {
                     item.setLocalPath(localFile.getAbsolutePath());
                     downloadedCount++;
                     Log.d("Prefetch", "File already exists: " + fileName);
-
-                    runOnUiThread(() -> {
-                        String fileType = item.getType() == MediaType.VIDEO ? "Video" : "Slika";
-                        Toast.makeText(MainActivity.this,
-                                "fijl" + fileType + " već postoji: " + fileName +
-                                        " (" + downloadedCount + "/" + totalMediaCount + ")",
-                                Toast.LENGTH_SHORT).show();
-                    });
                 }
             }
 
@@ -248,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean areAllFilesDownloaded() {
         if (mediaList == null || mediaList.isEmpty()) return false;
-
         for (MediaItem item : mediaList) {
             if (item.getLocalPath() == null) {
                 String fileName = getFileNameFromUrl(item.getUrl(), mediaList.indexOf(item), item.getType());
@@ -285,52 +263,93 @@ public class MainActivity extends AppCompatActivity {
                     input.close();
 
                     runOnUiThread(onComplete);
-                } else {
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this,
-                                "Greška pri preuzimanju fajla",
-                                Toast.LENGTH_SHORT).show();
-                    });
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this,
-                            "Greška: " + e.getMessage(),
-                            Toast.LENGTH_SHORT).show();
-                });
             }
         }).start();
     }
 
+
     private void initializeMediaList(Context context) {
         mediaList = new ArrayList<>();
 
-        Properties properties = PropertiesLoader.loadProperties(context, R.raw.media);
+        loadMediaFromServer();
 
-        int mediaCount = Integer.parseInt(properties.getProperty("media.count", "0"));
+        try {
+            Properties properties = PropertiesLoader.loadProperties(context, R.raw.media);
+            int mediaCount = Integer.parseInt(properties.getProperty("media.count", "0"));
 
-        for (int i = 1; i <= mediaCount; i++) {
-            String url = properties.getProperty("media." + i + ".url");
-            String typeStr = properties.getProperty("media." + i + ".type");
-            String durationStr = properties.getProperty("media." + i + ".duration");
+            for (int i = 1; i <= mediaCount; i++) {
+                String url = properties.getProperty("media." + i + ".url");
+                String typeStr = properties.getProperty("media." + i + ".type");
+                String durationStr = properties.getProperty("media." + i + ".duration");
 
-            if (url != null && typeStr != null && durationStr != null) {
-                MediaType mediaType = MediaType.fromString(typeStr);
-                int duration = Integer.parseInt(durationStr);
-
-                mediaList.add(new MediaItem(url, mediaType, duration));
+                if (url != null && typeStr != null && durationStr != null) {
+                    MediaType mediaType = MediaType.fromString(typeStr);
+                    int duration = Integer.parseInt(durationStr);
+                    mediaList.add(new MediaItem(url, mediaType, duration));
+                }
             }
+        } catch (Exception e) {
+            Log.e("MediaList", "Error loading from properties", e);
         }
 
+
         if (mediaList.isEmpty()) {
-            Log.e("MediaList", "No media items loaded from properties, using defaults");
+            Log.e("MediaList", "No media items loaded, using defaults");
             mediaList.add(new MediaItem(
-                    "https://picsum.photos/200/300",
+                    "https://picsum.photos/1920/1080",
+                    MediaType.IMAGE,
+                    5000
+            ));
+            mediaList.add(new MediaItem(
+                    "https://picsum.photos/1920/1080?grayscale",
                     MediaType.IMAGE,
                     5000
             ));
         }
+    }
+
+
+    private void loadMediaFromServer() {
+        MediaApiService apiService = RetrofitClient.getClient().create(MediaApiService.class);
+
+        Call<List<MediaItemResponse>> call = apiService.getMediaItems();
+        call.enqueue(new retrofit2.Callback<List<MediaItemResponse>>() {
+            @Override
+            public void onResponse(Call<List<MediaItemResponse>> call, retrofit2.Response<List<MediaItemResponse>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+
+                    List<MediaItem> serverMediaList = new ArrayList<>();
+
+                    for (MediaItemResponse itemResponse : response.body()) {
+                        int duration = 5000;
+                        if (itemResponse.getDurationInSeconds() != null) {
+                            duration = itemResponse.getDurationInSeconds() * 1000;
+                        } else if ("video".equalsIgnoreCase(itemResponse.getType())) {
+                            duration = 15000;
+                        }
+
+                        MediaType mediaType = MediaType.fromString(itemResponse.getType());
+                        serverMediaList.add(new MediaItem(itemResponse.getUrl(), mediaType, duration));
+                    }
+
+                    mediaList.clear();
+                    mediaList.addAll(serverMediaList);
+
+                    Log.d("API", "Loaded " + mediaList.size() + " items from server");
+
+                } else {
+                    Log.e("API", "Server error: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<MediaItemResponse>> call, Throwable t) {
+                Log.e("API", "Network error: " + t.getMessage());
+            }
+        });
     }
 
     private void showCurrentMedia() {
@@ -349,10 +368,9 @@ public class MainActivity extends AppCompatActivity {
             current.setLocalPath(localFile.getAbsolutePath());
             Log.d("Media", "Using local file: " + localFile.getAbsolutePath());
 
-
-            String fileType = current.getType() == MediaType.VIDEO ? " Video" : "Slika";
+            String fileType = current.getType() == MediaType.VIDEO ? "Video" : "Slika";
             Toast.makeText(this,
-                    "Pocetak: " + fileType + " - " + fileName,
+                    "Početak: " + fileType + " - " + fileName,
                     Toast.LENGTH_SHORT).show();
 
             displayMedia(current);
@@ -366,7 +384,7 @@ public class MainActivity extends AppCompatActivity {
             downloadFile(current.getUrl(), localFile, () -> {
                 current.setLocalPath(localFile.getAbsolutePath());
                 Toast.makeText(this,
-                        " Fajl je preuzet: " + fileType + " - " + fileName,
+                        "Fajl je preuzet: " + fileType + " - " + fileName,
                         Toast.LENGTH_SHORT).show();
                 displayMedia(current);
             });
@@ -389,6 +407,7 @@ public class MainActivity extends AppCompatActivity {
         handler.post(timerRunnable);
     }
 
+    @SuppressLint("DefaultLocale")
     private void updateTimer() {
         long elapsed = System.currentTimeMillis() - startTime;
         long remaining = currentDuration - elapsed;
