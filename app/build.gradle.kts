@@ -8,8 +8,6 @@ if (localPropertiesFile.exists()) {
 
 val API_KEY: String = localProperties.getProperty("API_KEY") ?: ""
 
-
-
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -24,9 +22,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
         buildConfigField("String", "API_KEY", "\"${API_KEY}\"")
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

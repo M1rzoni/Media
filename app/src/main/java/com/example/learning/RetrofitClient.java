@@ -1,5 +1,7 @@
 package com.example.learning;
 
+import com.google.gson.internal.GsonBuildConfig;
+
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -10,6 +12,7 @@ public class RetrofitClient {
 
     private static final String BASE_URL = BuildConfig.API_KEY;
     private static Retrofit retrofit = null;
+    private GsonBuildConfig gsonBuildConfig;
 
     public static Retrofit getClient() {
         if (retrofit == null) {
