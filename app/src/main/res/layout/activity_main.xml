@@ -14,20 +14,21 @@
         app:lottie_loop="false"
         app:lottie_rawRes="@raw/all_data_recovery_animation" />
 
+
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:adjustViewBounds="true"
-        android:scaleType="fitCenter"
+        android:scaleType="centerCrop"
+        android:adjustViewBounds="false"
         android:contentDescription="@string/app_name" />
+
 
     <VideoView
         android:id="@+id/videoView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
-        android:scaleType="centerCrop"
+        android:scaleType="fitXY"
         android:visibility="gone" />
 
     <TextView

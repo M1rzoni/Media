@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootPlayer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Naslov -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Barkod Scanner"
+        android:textColor="@android:color/white"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="30dp" />
+
+    <!-- Scan Button -->
+    <Button
+        android:id="@+id/scanButton"
+        android:layout_width="250dp"
+        android:layout_height="60dp"
+        android:text="SKENIRAJ BARKOD"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:backgroundTint="@android:color/holo_blue_dark"
+        android:textColor="@android:color/white"
+        android:layout_marginBottom="40dp" />
+
+    <!-- Rezultati -->
+    <TextView
+        android:id="@+id/resultText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Skeniraj barkod za informacije o artiklu"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textAlignment="center"
+        android:lineSpacingExtra="8sp"
+        android:padding="16dp"
+        android:layout_marginBottom="10dp"
+        android:background="#1AFFFFFF"
+        android:paddingHorizontal="10dp" />
+
+    <!-- Cijena -->
+    <TextView
+        android:id="@+id/priceText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cijena: --"
+        android:textColor="@android:color/holo_green_light"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textAlignment="center"
+        android:padding="16dp"
+        android:background="#2AFFFFFF"
+        android:layout_marginBottom="30dp" />
+
+    <!-- Back button -->
+    <Button
+        android:id="@+id/backButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="← Nazad na Player"
+        android:textColor="@android:color/white"
+        android:background="@android:color/transparent"
+        android:textSize="16sp"
+        android:padding="16dp" />
+
+    <!-- Instructions -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="Double click bilo gdje za povratak\nili koristi gumb za skeniranje"
+        android:textColor="#CCFFFFFF"
+        android:textSize="12sp"
+        android:textAlignment="center" />
+
+</LinearLayout>

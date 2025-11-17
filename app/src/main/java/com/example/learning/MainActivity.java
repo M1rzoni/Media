@@ -5,37 +5,41 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.content.Intent;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
+import android.view.ViewGroup;
+import android.media.MediaPlayer;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.airbnb.lottie.LottieAnimationView;
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 import retrofit2.Call;
 
 public class MainActivity extends AppCompatActivity {
@@ -49,6 +53,8 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable nextRunnable = this::advanceToNext;
 
     private LottieAnimationView lottieAnimationView;
+    private MediaCacheManager cacheManager;
+
     private final Runnable timerRunnable = new Runnable() {
         @Override
         public void run() {
@@ -62,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
     private int downloadedCount = 0;
     private int totalMediaCount = 0;
     private boolean allFilesAlreadyExist = false;
+    private GestureDetector gestureDetector;
 
     @SuppressLint("SetTextI18n")
     @Override
@@ -80,9 +87,55 @@ public class MainActivity extends AppCompatActivity {
         timerTextView = findViewById(R.id.timerTextView);
         lottieAnimationView = findViewById(R.id.lottieAnimationView);
 
+        cacheManager = MediaCacheManager.getInstance(this);
+
+        initializeGestureDetector();
+
+        // Postavi touch listener na root layout
+        FrameLayout rootLayout = findViewById(R.id.root);
+        rootLayout.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                gestureDetector.onTouchEvent(event);
+                return true;
+            }
+        });
+
+
         initializeMediaList(this);
         startSplashAnimation();
+
     }
+
+    private void initializeGestureDetector() {
+        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                Log.d("DoubleClick", "Double tap detected");
+                openPlayerActivity();
+                return true;
+            }
+        });
+    }
+
+    private void openPlayerActivity() {
+        // Pauziraj medije
+        if (videoView.isPlaying()) {
+            videoView.pause();
+        }
+
+        // Zaustavi timere
+        handler.removeCallbacks(timerRunnable);
+        handler.removeCallbacks(nextRunnable);
+
+        // Pokreni PlayerActivity
+        Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
+        startActivity(intent);
+
+        // Dodaj fade animaciju
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+    }
+
 
     private void startSplashAnimation() {
         lottieAnimationView.setVisibility(View.VISIBLE);
@@ -116,11 +169,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(MainActivity.this, "Preuzimanje", Toast.LENGTH_SHORT).show();
                     handler.postDelayed(() -> {
-                        if (areAllFilesDownloaded()) {
-                            startMediaPlayback();
-                        } else {
-                            startMediaPlayback();
-                        }
+                        startMediaPlayback(); // Uvijek pokreni playback
                     }, 2000);
                 }
             }
@@ -139,22 +188,11 @@ public class MainActivity extends AppCompatActivity {
         showCurrentMedia();
     }
 
-    private String getFileNameFromUrl(String url, int index, MediaType type) {
-        String last = Uri.parse(url).getLastPathSegment();
-        if (last == null || last.isEmpty()) {
-            return "media_" + index + (type == MediaType.VIDEO ? ".mp4" : ".jpg");
-        }
-        return last;
-    }
-
     private boolean checkAllFilesExist() {
         if (mediaList == null || mediaList.isEmpty()) return false;
 
-        for (int i = 0; i < mediaList.size(); i++) {
-            MediaItem item = mediaList.get(i);
-            String fileName = getFileNameFromUrl(item.getUrl(), i, item.getType());
-            File localFile = getMediaFile(fileName);
-            if (!localFile.exists()) {
+        for (MediaItem item : mediaList) {
+            if (!cacheManager.isCached(item.getUrl())) {
                 return false;
             }
         }
@@ -170,106 +208,67 @@ public class MainActivity extends AppCompatActivity {
         totalMediaCount = mediaList.size();
         downloadedCount = 0;
 
-        new Thread(() -> {
-            OkHttpClient client = new OkHttpClient();
-            for (int i = 0; i < mediaList.size(); i++) {
-                MediaItem item = mediaList.get(i);
-                String fileName = getFileNameFromUrl(item.getUrl(), i, item.getType());
-                File localFile = getMediaFile(fileName);
+        for (int i = 0; i < mediaList.size(); i++) {
+            MediaItem item = mediaList.get(i);
 
-                if (!localFile.exists()) {
-                    try {
-                        Log.d("Prefetch", "Downloading: " + item.getUrl());
-                        Request request = new Request.Builder().url(item.getUrl()).build();
-                        Response response = client.newCall(request).execute();
-                        if (response.isSuccessful() && response.body() != null) {
-                            InputStream input = response.body().byteStream();
-                            FileOutputStream output = new FileOutputStream(localFile);
-                            byte[] buffer = new byte[8192];
-                            int read;
-                            while ((read = input.read(buffer)) != -1) {
-                                output.write(buffer, 0, read);
-                            }
-                            output.close();
-                            input.close();
-                            item.setLocalPath(localFile.getAbsolutePath());
-                            Log.d("Prefetch", "Successfully downloaded: " + fileName);
-
-                            runOnUiThread(() -> {
-                                downloadedCount++;
-                                String fileType = item.getType() == MediaType.VIDEO ? "🎥 Video" : "🖼️ Slika";
-                                Toast.makeText(MainActivity.this,
-                                        "✅ " + fileType + " preuzet: " + fileName +
-                                                " (" + downloadedCount + "/" + totalMediaCount + ")",
-                                        Toast.LENGTH_SHORT).show();
-                            });
-                        } else {
-                            Log.e("Prefetch", "Failed to download: " + item.getUrl());
-                        }
-                    } catch (Exception e) {
-                        Log.e("Prefetch", "Error downloading: " + item.getUrl(), e);
-                    }
-                } else {
-                    item.setLocalPath(localFile.getAbsolutePath());
-                    downloadedCount++;
-                    Log.d("Prefetch", "File already exists: " + fileName);
-                }
+            if (cacheManager.isCached(item.getUrl())) {
+                downloadedCount++;
+                Log.d("Prefetch", "File already cached: " + item.getUrl());
+                continue;
             }
 
-            runOnUiThread(() -> {
-                Log.d("Prefetch", "Download completed: " + downloadedCount + "/" + totalMediaCount);
-                if (onComplete != null) {
-                    onComplete.run();
+            final int currentIndex = i;
+            cacheManager.downloadMediaAsync(item.getUrl(), new MediaCacheManager.DownloadListener() {
+                @Override
+                public void onSuccess(File file) {
+                    downloadedCount++;
+                    String fileType = item.getType() == MediaType.VIDEO ? " Video" : "🖼 Slika";
+                    Log.d("Prefetch", "Successfully downloaded: " + file.getName());
+
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this,
+                                " " + fileType + " preuzet (" + downloadedCount + "/" + totalMediaCount + ")",
+                                Toast.LENGTH_SHORT).show();
+
+                        if (downloadedCount == totalMediaCount && onComplete != null) {
+                            onComplete.run();
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    Log.e("Prefetch", "Error downloading: " + item.getUrl(), e);
+                    downloadedCount++;
+
+                    if (downloadedCount == totalMediaCount && onComplete != null) {
+                        runOnUiThread(onComplete);
+                    }
+                }
+
+                @Override
+                public void onProgress() {
+                    // Download in progress
                 }
             });
-        }).start();
+        }
+
+        // If all files were already cached
+        if (downloadedCount == totalMediaCount && onComplete != null) {
+            runOnUiThread(onComplete);
+        }
     }
 
     private boolean areAllFilesDownloaded() {
         if (mediaList == null || mediaList.isEmpty()) return false;
+
         for (MediaItem item : mediaList) {
-            if (item.getLocalPath() == null) {
-                String fileName = getFileNameFromUrl(item.getUrl(), mediaList.indexOf(item), item.getType());
-                File localFile = getMediaFile(fileName);
-                if (!localFile.exists()) {
-                    return false;
-                }
+            if (!cacheManager.isCached(item.getUrl())) {
+                return false;
             }
         }
         return true;
     }
-
-    private File getMediaFile(String fileName) {
-        File dir = new File(getFilesDir(), "media");
-        if (!dir.exists()) dir.mkdirs();
-        return new File(dir, fileName);
-    }
-
-    private void downloadFile(String url, File destination, Runnable onComplete) {
-        new Thread(() -> {
-            try {
-                OkHttpClient client = new OkHttpClient();
-                Request request = new Request.Builder().url(url).build();
-                Response response = client.newCall(request).execute();
-                if (response.isSuccessful()) {
-                    InputStream input = response.body().byteStream();
-                    FileOutputStream output = new FileOutputStream(destination);
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, bytesRead);
-                    }
-                    output.close();
-                    input.close();
-
-                    runOnUiThread(onComplete);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-    }
-
 
     private void initializeMediaList(Context context) {
         mediaList = new ArrayList<>();
@@ -295,7 +294,6 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MediaList", "Error loading from properties", e);
         }
 
-
         if (mediaList.isEmpty()) {
             Log.e("MediaList", "No media items loaded, using defaults");
             mediaList.add(new MediaItem(
@@ -311,7 +309,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     private void loadMediaFromServer() {
         MediaApiService apiService = RetrofitClient.getClient().create(MediaApiService.class);
 
@@ -320,7 +317,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<List<MediaItemResponse>> call, retrofit2.Response<List<MediaItemResponse>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-
                     List<MediaItem> serverMediaList = new ArrayList<>();
 
                     for (MediaItemResponse itemResponse : response.body()) {
@@ -339,7 +335,6 @@ public class MainActivity extends AppCompatActivity {
                     mediaList.addAll(serverMediaList);
 
                     Log.d("API", "Loaded " + mediaList.size() + " items from server");
-
                 } else {
                     Log.e("API", "Server error: " + response.code());
                 }
@@ -361,37 +356,39 @@ public class MainActivity extends AppCompatActivity {
 
         MediaItem current = mediaList.get(currentMediaIndex);
 
-        String fileName = getFileNameFromUrl(current.getUrl(), currentMediaIndex, current.getType());
-        File localFile = getMediaFile(fileName);
-
-        if (localFile.exists()) {
-            current.setLocalPath(localFile.getAbsolutePath());
-            Log.d("Media", "Using local file: " + localFile.getAbsolutePath());
-
-            String fileType = current.getType() == MediaType.VIDEO ? "Video" : "Slika";
-            Toast.makeText(this,
-                    "Početak: " + fileType + " - " + fileName,
-                    Toast.LENGTH_SHORT).show();
-
-            displayMedia(current);
+        if (cacheManager.isCached(current.getUrl())) {
+            File localFile = cacheManager.getMediaFile(current.getUrl());
+            displayMedia(current, localFile);
         } else {
-            Log.w("Media", "File not found, downloading: " + fileName);
             String fileType = current.getType() == MediaType.VIDEO ? "Video" : "Slika";
-            Toast.makeText(this,
-                    "Preuzimanje: " + fileType + " - " + fileName,
-                    Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Preuzimanje: " + fileType, Toast.LENGTH_SHORT).show();
 
-            downloadFile(current.getUrl(), localFile, () -> {
-                current.setLocalPath(localFile.getAbsolutePath());
-                Toast.makeText(this,
-                        "Fajl je preuzet: " + fileType + " - " + fileName,
-                        Toast.LENGTH_SHORT).show();
-                displayMedia(current);
+            cacheManager.downloadMediaAsync(current.getUrl(), new MediaCacheManager.DownloadListener() {
+                @Override
+                public void onSuccess(File file) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, "Fajl je preuzet", Toast.LENGTH_SHORT).show();
+                        displayMedia(current, file);
+                    });
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    runOnUiThread(() -> {
+                        Log.e("Media", "Failed to download media: " + current.getUrl(), e);
+                        handler.postDelayed(nextRunnable, 1000);
+                    });
+                }
+
+                @Override
+                public void onProgress() {
+                    // Download in progress
+                }
             });
         }
     }
 
-    private void displayMedia(MediaItem mediaItem) {
+    private void displayMedia(MediaItem mediaItem, File localFile) {
         handler.removeCallbacks(nextRunnable);
         handler.removeCallbacks(timerRunnable);
 
@@ -399,9 +396,9 @@ public class MainActivity extends AppCompatActivity {
         currentDuration = mediaItem.getDuration();
 
         if (mediaItem.getType() == MediaType.VIDEO) {
-            showVideo(mediaItem);
+            showVideo(mediaItem, localFile);
         } else {
-            showImage(mediaItem);
+            showImage(mediaItem, localFile);
         }
 
         handler.post(timerRunnable);
@@ -422,36 +419,65 @@ public class MainActivity extends AppCompatActivity {
         timerTextView.setText(timeText);
     }
 
-    private void showVideo(MediaItem mediaItem) {
+    private void showVideo(MediaItem mediaItem, File localFile) {
         imageView.setVisibility(View.GONE);
         videoView.setVisibility(View.VISIBLE);
 
+        // Postavi VideoView da zauzme cijeli ekran
+        ViewGroup.LayoutParams lp = videoView.getLayoutParams();
+        lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        videoView.setLayoutParams(lp);
+
         try {
-            if (mediaItem.getLocalPath() == null) {
-                Log.e("Video", "Local path is null for video");
-                handler.postDelayed(nextRunnable, 1000);
-                return;
-            }
-
-            File file = new File(mediaItem.getLocalPath());
-            if (!file.exists()) {
-                Log.e("Video", "Video file doesn't exist: " + mediaItem.getLocalPath());
-                handler.postDelayed(nextRunnable, 1000);
-                return;
-            }
-
-            Uri uri = Uri.fromFile(file);
+            Uri uri = Uri.fromFile(localFile);
             videoView.setVideoURI(uri);
 
             videoView.setOnPreparedListener(mp -> {
+                // FORCE CENTER CROP SCALING
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    try {
+                        mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+                    } catch (Exception e) {
+                        Log.e("Video", "Video scaling not supported", e);
+                    }
+                }
+
+                // Manual scaling za starije verzije
+                mp.setOnVideoSizeChangedListener((mp2, videoWidth, videoHeight) -> {
+                    if (videoWidth <= 0 || videoHeight <= 0) return;
+
+                    DisplayMetrics dm = getResources().getDisplayMetrics();
+                    int screenWidth = dm.widthPixels;
+                    int screenHeight = dm.heightPixels;
+
+                    // Izračunaj scale factor za center crop
+                    float widthRatio = (float) screenWidth / videoWidth;
+                    float heightRatio = (float) screenHeight / videoHeight;
+                    float scale = Math.max(widthRatio, heightRatio);
+
+                    // Postavi nove dimenzije
+                    int newWidth = Math.round(videoWidth * scale);
+                    int newHeight = Math.round(videoHeight * scale);
+
+                    ViewGroup.LayoutParams params = videoView.getLayoutParams();
+                    params.width = newWidth;
+                    params.height = newHeight;
+                    videoView.setLayoutParams(params);
+
+                    // Centriraj video
+                    if (videoView.getParent() instanceof FrameLayout) {
+                        FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) videoView.getLayoutParams();
+                        frameParams.gravity = Gravity.CENTER;
+                        videoView.setLayoutParams(frameParams);
+                    }
+                });
+
                 mp.setLooping(false);
                 videoView.start();
 
                 int videoDuration = mp.getDuration();
-                long scheduleDelay = mediaItem.getDuration();
-                if (videoDuration > 0) {
-                    scheduleDelay = Math.min(scheduleDelay, videoDuration);
-                }
+                long scheduleDelay = Math.min(mediaItem.getDuration(), videoDuration > 0 ? videoDuration : mediaItem.getDuration());
                 handler.postDelayed(nextRunnable, scheduleDelay);
             });
 
@@ -472,47 +498,39 @@ public class MainActivity extends AppCompatActivity {
             handler.postDelayed(nextRunnable, 1000);
         }
     }
-
-    private void showImage(MediaItem mediaItem) {
+    private void showImage(MediaItem mediaItem, File localFile) {
         videoView.setVisibility(View.GONE);
         imageView.setVisibility(View.VISIBLE);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 
         try {
-            if (mediaItem.getLocalPath() == null) {
-                Log.e("Image", "Local path is null for image");
-                handler.postDelayed(nextRunnable, 1000);
-                return;
-            }
-
-            File file = new File(mediaItem.getLocalPath());
-            if (!file.exists()) {
-                Log.e("Image", "Image file doesn't exist: " + mediaItem.getLocalPath());
-                handler.postDelayed(nextRunnable, 1000);
-                return;
-            }
-
             DisplayMetrics dm = getResources().getDisplayMetrics();
             int targetW = dm.widthPixels;
             int targetH = dm.heightPixels;
 
+            // Koristimo Glide bez disk cache jer vec imamo nas cache
             RequestOptions options = new RequestOptions()
                     .override(targetW, targetH)
-                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC);
+                    .centerCrop()
+                    .diskCacheStrategy(DiskCacheStrategy.NONE) // Bez Glide cache
+                    .skipMemoryCache(true); // Bez memory cache
 
             Glide.with(this)
-                    .load(file)
-                    .thumbnail(0.1f)
+                    .load(localFile)
                     .apply(options)
                     .listener(new RequestListener<Drawable>() {
                         @Override
-                        public boolean onLoadFailed(@Nullable com.bumptech.glide.load.engine.GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model,
+                                                    Target<Drawable> target, boolean isFirstResource) {
                             Log.e("Glide", "Image load failed");
                             handler.postDelayed(nextRunnable, 1000);
                             return true;
                         }
 
                         @Override
-                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                        public boolean onResourceReady(Drawable resource, Object model,
+                                                       Target<Drawable> target, DataSource dataSource,
+                                                       boolean isFirstResource) {
                             handler.postDelayed(nextRunnable, mediaItem.getDuration());
                             return false;
                         }
