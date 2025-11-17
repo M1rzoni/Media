@@ -1,4 +1,14 @@
-import org.gradle.kotlin.dsl.implementation
+import java.util.Properties
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
+val API_KEY: String = localProperties.getProperty("API_KEY") ?: ""
+
+
 
 plugins {
     alias(libs.plugins.android.application)
@@ -6,7 +16,6 @@ plugins {
 
 android {
     namespace = "com.example.learning"
-
     compileSdk = 35
 
     defaultConfig {
@@ -15,6 +24,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "API_KEY", "\"${API_KEY}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,11 +50,11 @@ dependencies {
     implementation(libs.appcompat)
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
-    implementation ("com.airbnb.android:lottie-compose:6.3.0")
-    implementation ("androidx.navigation:navigation-compose:2.7.7")
-    implementation ("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation ("com.squareup.okhttp3:logging-interceptor:4.10.0")
+    implementation("com.airbnb.android:lottie-compose:6.3.0")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
