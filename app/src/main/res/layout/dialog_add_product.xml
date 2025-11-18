@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Naziv artikla:"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:layout_marginBottom="5dp" />
+
+    <EditText
+        android:id="@+id/productNameEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Unesite naziv artikla"
+        android:inputType="textCapWords"
+        android:maxLines="1"
+        android:layout_marginBottom="15dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Barkod:"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:layout_marginBottom="5dp" />
+
+    <EditText
+        android:id="@+id/barcodeEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Unesite barkod"
+        android:inputType="number"
+        android:maxLines="1"
+        android:layout_marginBottom="15dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cijena (KM):"
+        android:textColor="@android:color/black"
+        android:textSize="16sp"
+        android:layout_marginBottom="5dp" />
+
+    <EditText
+        android:id="@+id/priceEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Unesite cijenu"
+        android:inputType="numberDecimal"
+        android:maxLines="1" />
+
+</LinearLayout>

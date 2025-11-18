@@ -10,7 +10,6 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Naslov -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -20,7 +19,6 @@
         android:textStyle="bold"
         android:layout_marginBottom="30dp" />
 
-    <!-- Scan Button -->
     <Button
         android:id="@+id/scanButton"
         android:layout_width="250dp"
@@ -32,7 +30,6 @@
         android:textColor="@android:color/white"
         android:layout_marginBottom="40dp" />
 
-    <!-- Rezultati -->
     <TextView
         android:id="@+id/resultText"
         android:layout_width="match_parent"
@@ -47,7 +44,6 @@
         android:background="#1AFFFFFF"
         android:paddingHorizontal="10dp" />
 
-    <!-- Cijena -->
     <TextView
         android:id="@+id/priceText"
         android:layout_width="match_parent"
@@ -61,7 +57,6 @@
         android:background="#2AFFFFFF"
         android:layout_marginBottom="30dp" />
 
-    <!-- Back button -->
     <Button
         android:id="@+id/backButton"
         android:layout_width="wrap_content"
@@ -72,7 +67,6 @@
         android:textSize="16sp"
         android:padding="16dp" />
 
-    <!-- Instructions -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -82,4 +76,14 @@
         android:textSize="12sp"
         android:textAlignment="center" />
 
+    <Button
+        android:id="@+id/addProductButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Dodaj Artikal"
+        android:textAlignment="center"
+        android:background="@android:color/transparent"
+        android:textSize="16sp"
+        android:paddingTop="40sp"
+        />
 </LinearLayout>

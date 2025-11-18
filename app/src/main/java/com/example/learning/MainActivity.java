@@ -91,7 +91,6 @@ public class MainActivity extends AppCompatActivity {
 
         initializeGestureDetector();
 
-        // Postavi touch listener na root layout
         FrameLayout rootLayout = findViewById(R.id.root);
         rootLayout.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -124,15 +123,12 @@ public class MainActivity extends AppCompatActivity {
             videoView.pause();
         }
 
-        // Zaustavi timere
         handler.removeCallbacks(timerRunnable);
         handler.removeCallbacks(nextRunnable);
 
-        // Pokreni PlayerActivity
         Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
         startActivity(intent);
 
-        // Dodaj fade animaciju
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 
@@ -169,7 +165,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(MainActivity.this, "Preuzimanje", Toast.LENGTH_SHORT).show();
                     handler.postDelayed(() -> {
-                        startMediaPlayback(); // Uvijek pokreni playback
+                        startMediaPlayback();
                     }, 2000);
                 }
             }
@@ -248,12 +244,11 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onProgress() {
-                    // Download in progress
+
                 }
             });
         }
 
-        // If all files were already cached
         if (downloadedCount == totalMediaCount && onComplete != null) {
             runOnUiThread(onComplete);
         }
@@ -382,7 +377,7 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onProgress() {
-                    // Download in progress
+
                 }
             });
         }
@@ -423,18 +418,11 @@ public class MainActivity extends AppCompatActivity {
         imageView.setVisibility(View.GONE);
         videoView.setVisibility(View.VISIBLE);
 
-        // Postavi VideoView da zauzme cijeli ekran
-        ViewGroup.LayoutParams lp = videoView.getLayoutParams();
-        lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-        lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
-        videoView.setLayoutParams(lp);
-
         try {
             Uri uri = Uri.fromFile(localFile);
             videoView.setVideoURI(uri);
 
             videoView.setOnPreparedListener(mp -> {
-                // FORCE CENTER CROP SCALING
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     try {
                         mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
@@ -443,7 +431,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                // Manual scaling za starije verzije
                 mp.setOnVideoSizeChangedListener((mp2, videoWidth, videoHeight) -> {
                     if (videoWidth <= 0 || videoHeight <= 0) return;
 
@@ -451,33 +438,31 @@ public class MainActivity extends AppCompatActivity {
                     int screenWidth = dm.widthPixels;
                     int screenHeight = dm.heightPixels;
 
-                    // Izračunaj scale factor za center crop
-                    float widthRatio = (float) screenWidth / videoWidth;
-                    float heightRatio = (float) screenHeight / videoHeight;
-                    float scale = Math.max(widthRatio, heightRatio);
+                    float videoAspect = (float) videoWidth / videoHeight;
+                    float screenAspect = (float) screenWidth / screenHeight;
 
-                    // Postavi nove dimenzije
-                    int newWidth = Math.round(videoWidth * scale);
-                    int newHeight = Math.round(videoHeight * scale);
+                    int newWidth, newHeight;
+                    if (videoAspect > screenAspect) {
 
-                    ViewGroup.LayoutParams params = videoView.getLayoutParams();
-                    params.width = newWidth;
-                    params.height = newHeight;
-                    videoView.setLayoutParams(params);
+                        newHeight = screenHeight;
+                        newWidth = (int) (screenHeight * videoAspect);
+                    } else {
 
-                    // Centriraj video
-                    if (videoView.getParent() instanceof FrameLayout) {
-                        FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) videoView.getLayoutParams();
-                        frameParams.gravity = Gravity.CENTER;
-                        videoView.setLayoutParams(frameParams);
+                        newWidth = screenWidth;
+                        newHeight = (int) (screenWidth / videoAspect);
                     }
+
+                    FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(newWidth, newHeight);
+                    params.gravity = Gravity.CENTER;
+                    videoView.setLayoutParams(params);
                 });
 
                 mp.setLooping(false);
                 videoView.start();
 
                 int videoDuration = mp.getDuration();
-                long scheduleDelay = Math.min(mediaItem.getDuration(), videoDuration > 0 ? videoDuration : mediaItem.getDuration());
+                long scheduleDelay = Math.min(mediaItem.getDuration(),
+                        videoDuration > 0 ? videoDuration : mediaItem.getDuration());
                 handler.postDelayed(nextRunnable, scheduleDelay);
             });
 
@@ -492,28 +477,23 @@ public class MainActivity extends AppCompatActivity {
                 handler.postDelayed(nextRunnable, 1000);
                 return true;
             });
-
         } catch (Exception e) {
             e.printStackTrace();
             handler.postDelayed(nextRunnable, 1000);
         }
     }
+
     private void showImage(MediaItem mediaItem, File localFile) {
         videoView.setVisibility(View.GONE);
         imageView.setVisibility(View.VISIBLE);
-        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        imageView.setScaleType(ImageView.ScaleType.FIT_CENTER); // Changed to FIT_CENTER first
 
         try {
-            DisplayMetrics dm = getResources().getDisplayMetrics();
-            int targetW = dm.widthPixels;
-            int targetH = dm.heightPixels;
 
-            // Koristimo Glide bez disk cache jer vec imamo nas cache
             RequestOptions options = new RequestOptions()
-                    .override(targetW, targetH)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.NONE) // Bez Glide cache
-                    .skipMemoryCache(true); // Bez memory cache
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
+                    .dontTransform();
 
             Glide.with(this)
                     .load(localFile)
@@ -531,18 +511,26 @@ public class MainActivity extends AppCompatActivity {
                         public boolean onResourceReady(Drawable resource, Object model,
                                                        Target<Drawable> target, DataSource dataSource,
                                                        boolean isFirstResource) {
+
+                            int imageWidth = resource.getIntrinsicWidth();
+                            int imageHeight = resource.getIntrinsicHeight();
+
+                            DisplayMetrics dm = getResources().getDisplayMetrics();
+                            float imageAspect = (float) imageWidth / imageHeight;
+                            float screenAspect = (float) dm.widthPixels / dm.heightPixels;
+
+                            imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+
                             handler.postDelayed(nextRunnable, mediaItem.getDuration());
                             return false;
                         }
                     })
                     .into(imageView);
-
         } catch (Exception e) {
             e.printStackTrace();
             handler.postDelayed(nextRunnable, 1000);
         }
     }
-
     private void advanceToNext() {
         currentMediaIndex++;
         if (currentMediaIndex >= mediaList.size()) currentMediaIndex = 0;

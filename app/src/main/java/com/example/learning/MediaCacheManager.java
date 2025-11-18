@@ -110,7 +110,6 @@ public class MediaCacheManager {
     }
 
     private String generateFilename(String url) {
-        // Koristi hash URL-a za jedinstveno ime fajla
         return String.valueOf(url.hashCode()) + getFileExtension(url);
     }
 
